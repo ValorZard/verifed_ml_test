@@ -3,7 +3,7 @@
 // Contracts are annotation comments  /@ ... @/  which the Pancake compiler
 // keeps as no-op Annot nodes.  Their bodies are HOL4 terms (ASCII syntax).
 // The HOL4 tooling in panContractLib turns every contract into a proof
-// obligation about Pancake's formal semantics; panQsortScript proves them.
+// obligation about Pancake's formal semantics; panQsortProofScript proves them.
 //
 // Contract vocabulary
 //   requires: P      precondition of the enclosing function

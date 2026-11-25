@@ -2,7 +2,7 @@
   Trusted C glue for the Pancake quicksort.
 
   Implements exactly the FFI oracle `qs_oracle` that the HOL4 correctness
-  theorem assumes (see panQsortScript.sml).  Numbers are 64-bit two's
+  theorem assumes (see panQsortSpecScript.sml).  Numbers are 64-bit two's
   complement words, transferred little-endian (x64 byte order):
 
     get_num : array of 9 bytes.  If stdin has another integer n (scanf "%lld"):

@@ -33,8 +33,14 @@ run "Holmake -j8"
 run "mkdir -p build && cake --sexp=true < qsort.sexp > build/qsort.S && \
      gcc -O2 -o build/qsort build/qsort.S /opt/cake/cake-x64-64/basis_ffi.c -lm"
 
+# 3. The Pancake version: check its program logic and contract proofs, then
+#    compile qsort.pnk with the verified compiler and link the FFI glue.
+run "cd pancake && Holmake -j8 panQsortProofTheory && mkdir -p build && \
+     cake --pancake < qsort.pnk > build/qsort_pan.S && \
+     gcc -O2 -o build/qsort_pan build/qsort_pan.S qsort_ffi.c"
+
 if [ "${1:-}" = "tier2" ]; then
-  # 3. Compile inside the logic (writes hol/compile/qsort.S) and prove the
+  # 4. Compile inside the logic (writes hol/compile/qsort.S) and prove the
   #    machine-code theorem qsort_compiled_thm.
   run "cd compile && Holmake -j6 qsortProofTheory"
   run "gcc -O2 -o build/qsort_inlogic compile/qsort.S /opt/cake/cake-x64-64/basis_ffi.c -lm"
@@ -42,4 +48,5 @@ fi
 
 echo
 echo "Done.  Try:  MSYS_NO_PATHCONV=1 docker exec $NAME $HOLDIR_IN/build/qsort 5 3 -1 42 0"
+echo "       echo 5 3 -1 42 0 | MSYS_NO_PATHCONV=1 docker exec -i $NAME $HOLDIR_IN/pancake/build/qsort_pan"
 echo "       (MSYS_NO_PATHCONV=1 is only needed in Git Bash on Windows)"

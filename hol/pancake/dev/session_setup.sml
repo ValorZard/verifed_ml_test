@@ -3,7 +3,7 @@ val _ = app load ["panQsortProofTheory", "panContractLib", "panStepLib", "blastL
 open panQsortProgTheory panQsortSpecTheory panLogicTheory panQsortProofTheory
      panStepLib panSemTheory;
 val _ = set_trace "Goalstack.print_goal_at_top" 0;
-val _ = show_assums := false;
+val _ = show_assums := true;
 val decls = rhs (concl panQsortProgTheory.qsort_decls_def);
 val contracts = panContractLib.contracts_of decls;
 fun goal_of name =

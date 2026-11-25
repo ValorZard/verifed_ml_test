@@ -404,3 +404,450 @@ val read_list_tac =
       first_assum ACCEPT_TAC);
 
 val read_list_spec = store_thm ("read_list_spec", goal_of "read_list", read_list_tac);
+
+(* ------------------------------------------------------------------------
+   Lemmas for qs and main: list segments, disjointness, frames
+   ------------------------------------------------------------------------ *)
+
+Theorem lseg_frame:
+  ∀xs m m' p q. lseg m xs p q ∧
+    (∀a. MEM a (MAP FST xs) ⇒ m' a = m a ∧ m' (a + 8w) = m (a + 8w)) ⇒
+    lseg m' xs p q
+Proof
+  Induct >> simp[lseg_def, pairTheory.FORALL_PROD] >> rw[] >> metis_tac[]
+QED
+
+Theorem lseg_append:
+  ∀xs ys m p q. lseg m (xs ++ ys) p q ⇔ ∃r. lseg m xs p r ∧ lseg m ys r q
+Proof
+  Induct >> simp[lseg_def, pairTheory.FORALL_PROD] >> metis_tac[]
+QED
+
+Theorem nodes_ok_PERM:
+  PERM as bs ⇒ (nodes_ok dm as ⇔ nodes_ok dm bs)
+Proof
+  rw[nodes_ok_def] >>
+  metis_tac[sortingTheory.ALL_DISTINCT_PERM, sortingTheory.MEM_PERM]
+QED
+
+Theorem nodes_ok_append:
+  nodes_ok dm (as ++ bs) ⇔
+    nodes_ok dm as ∧ nodes_ok dm bs ∧
+    ∀a b. MEM a as ∧ MEM b bs ⇒ a ≠ b ∧ a ≠ b + 8w ∧ b ≠ a + 8w
+Proof
+  rw[nodes_ok_def, listTheory.ALL_DISTINCT_APPEND] >> metis_tac[]
+QED
+
+Theorem lseg_frame_disjoint:
+  lseg m xs p q ∧ frame as m m' ∧
+  (∀a b. MEM a (MAP FST xs) ∧ MEM b as ⇒ a ≠ b ∧ a ≠ b + 8w) ⇒
+  lseg m' xs p q
+Proof
+  rw[frame_def] >> irule lseg_frame >> qexists_tac ‘m’ >> rw[] >>
+  first_x_assum irule >> rw[] >> metis_tac[wordsTheory.WORD_EQ_ADD_RCANCEL]
+QED
+
+Theorem lseg_update_node:
+  lseg m xs p q ∧ ¬MEM c (MAP FST xs) ∧
+  (∀b. MEM b (MAP FST xs) ⇒ b ≠ c + 8w) ⇒
+  lseg ((c + 8w =+ y) m) xs p q
+Proof
+  rw[] >> irule lseg_update >> gvs[listTheory.EVERY_MEM] >> rw[] >>
+  metis_tac[wordsTheory.WORD_EQ_ADD_RCANCEL]
+QED
+
+Theorem frame_refl[simp]:
+  frame as m m
+Proof
+  simp[frame_def]
+QED
+
+Theorem frame_trans:
+  frame as m1 m2 ∧ frame bs m2 m3 ∧ (∀b. MEM b bs ⇒ MEM b as) ⇒ frame as m1 m3
+Proof
+  rw[frame_def] >> metis_tac[]
+QED
+
+Theorem frame_update:
+  MEM c as ⇒ frame as m ((c + 8w =+ y) m)
+Proof
+  rw[frame_def, combinTheory.APPLY_UPDATE_THM] >> metis_tac[]
+QED
+
+Theorem frame_mono:
+  frame as m m' ∧ (∀b. MEM b as ⇒ MEM b bs) ⇒ frame bs m m'
+Proof
+  rw[frame_def] >> metis_tac[]
+QED
+
+Theorem transitive_val_le:
+  transitive val_le
+Proof
+  rw[relationTheory.transitive_def, pairTheory.FORALL_PROD, val_le_def] >>
+  metis_tac[wordsTheory.WORD_LESS_EQ_TRANS]
+QED
+
+Theorem lseg_frame_ok:
+  lseg m xs p q ∧ frame as m m' ∧ nodes_ok dm (MAP FST xs ++ as) ⇒
+  lseg m' xs p q
+Proof
+  rw[nodes_ok_append] >> irule lseg_frame_disjoint >> metis_tac[]
+QED
+
+Theorem lseg_upd:
+  lseg m xs p q ∧ nodes_ok dm (MAP FST xs ++ cs) ∧ MEM c cs ⇒
+  lseg ((c + 8w =+ y) m) xs p q
+Proof
+  rw[nodes_ok_append] >> irule lseg_update_node >> metis_tac[]
+QED
+
+Theorem frame_node:
+  frame as m m' ∧ nodes_ok dm (c :: as) ⇒ m' c = m c ∧ m' (c + 8w) = m (c + 8w)
+Proof
+  rw[frame_def, nodes_ok_def] >> first_x_assum irule >> rw[] >>
+  metis_tac[wordsTheory.WORD_EQ_ADD_RCANCEL]
+QED
+
+Theorem nodes_ok_perm:
+  PERM as bs ∧ nodes_ok dm bs ⇒ nodes_ok dm as
+Proof
+  metis_tac[nodes_ok_PERM]
+QED
+
+Theorem nodes_ok_parts2:
+  nodes_ok dm (c :: A ++ B) ⇒
+  nodes_ok dm A ∧ nodes_ok dm B ∧ nodes_ok dm (A ++ B) ∧ nodes_ok dm (B ++ A) ∧
+  nodes_ok dm (c :: A) ∧ nodes_ok dm (c :: B) ∧
+  nodes_ok dm (A ++ [c]) ∧ nodes_ok dm (B ++ [c])
+Proof
+  rw[nodes_ok_def, listTheory.ALL_DISTINCT_APPEND] >> metis_tac[]
+QED
+
+Theorem nodes_ok_parts3:
+  nodes_ok dm (c :: A ++ B ++ a :: R) ⇒
+  nodes_ok dm (A ++ [a]) ∧ nodes_ok dm (B ++ [a]) ∧ nodes_ok dm (R ++ [a]) ∧
+  c ≠ a + 8w ∧ a ∈ dm ∧ a + 8w ∈ dm ∧ a ≠ 0w
+Proof
+  rw[nodes_ok_def, listTheory.ALL_DISTINCT_APPEND] >> metis_tac[]
+QED
+
+Theorem nodes_ok_nonzero:
+  nodes_ok dm (c :: A ++ B ++ R) ⇒ EVERY (λa. a ≠ 0w) R
+Proof
+  rw[nodes_ok_def, listTheory.EVERY_MEM] >> metis_tac[]
+QED
+
+Theorem nodes_ok_perm_app:
+  PERM xs ys ∧ nodes_ok dm (MAP FST ys ++ X) ⇒ nodes_ok dm (MAP FST xs ++ X)
+Proof
+  strip_tac >> irule nodes_ok_perm >> qexists_tac ‘MAP FST ys ++ X’ >>
+  simp[sortingTheory.PERM_APPEND_IFF] >> irule sortingTheory.PERM_MAP >> simp[]
+QED
+
+Theorem frame_trans':
+  frame as m1 m2 ∧ frame as m2 m3 ⇒ frame as m1 m3
+Proof
+  rw[frame_def]
+QED
+
+Theorem frame_lift:
+  frame as m m' ∧ (∀b. MEM b as ⇒ MEM b bs) ⇒ frame bs m m'
+Proof
+  metis_tac[frame_mono]
+QED
+val nodes_ok_parts2' = SIMP_RULE (srw_ss()) [] nodes_ok_parts2;
+val nodes_ok_parts3' = SIMP_RULE (srw_ss()) [] nodes_ok_parts3;
+val nodes_ok_nonzero' = SIMP_RULE (srw_ss()) [] nodes_ok_nonzero;
+
+Theorem qs_perm:
+  PERM ys2 los ∧ PERM ys1 his ∧ PERM (los ++ his) t ⇒
+  PERM (ys2 ++ (h0,h1)::ys1) ((h0,h1)::t)
+Proof
+  rw[sortingTheory.PERM_FUN_APPEND_CONS] >>
+  irule sortingTheory.PERM_TRANS >> qexists_tac ‘los ++ his’ >> simp[] >>
+  irule sortingTheory.PERM_CONG >> simp[]
+QED
+
+Theorem qs_sorted:
+  SORTED val_le ys2 ∧ SORTED val_le ys1 ∧ PERM ys2 los ∧ PERM ys1 his ∧
+  EVERY (λ(a,v). v < h1) los ∧ EVERY (λ(a,v). h1 ≤ v) his ⇒
+  SORTED val_le (ys2 ++ (h0,h1)::ys1)
+Proof
+  rw[] >>
+  ‘(∀x. MEM x ys2 ⇒ SND x < h1) ∧ (∀y. MEM y ys1 ⇒ h1 ≤ SND y)’
+    by (fs[listTheory.EVERY_MEM] >> rw[] >>
+        imp_res_tac sortingTheory.MEM_PERM >> res_tac >>
+        TRY (PairCases_on ‘x’) >> TRY (PairCases_on ‘y’) >> fs[]) >>
+  irule sortingTheory.SORTED_APPEND_IMP >>
+  simp[transitive_val_le, sortingTheory.SORTED_EQ, pairTheory.FORALL_PROD,
+       val_le_def] >>
+  rw[] >> res_tac >> fs[] >>
+  metis_tac[wordsTheory.WORD_LESS_IMP_LESS_OR_EQ, wordsTheory.WORD_LESS_LESS_EQ_TRANS]
+QED
+
+Theorem qs_lseg:
+  lseg m' ys2 v' h0 ∧ m' h0 = Word h1 ∧ m' (h0 + 8w) = Word v ∧
+  lseg m' ys1 v acc ⇒
+  lseg m' (ys2 ++ (h0,h1)::ys1) v' acc
+Proof
+  rw[lseg_append, lseg_def] >> metis_tac[]
+QED
+
+Theorem FLOOKUP_res_var:
+  FLOOKUP (res_var lc (n, v)) x = if x = n then v else FLOOKUP lc x
+Proof
+  Cases_on ‘v’ >>
+  rw[panSemTheory.res_var_def, finite_mapTheory.FLOOKUP_UPDATE,
+     finite_mapTheory.DOMSUB_FLOOKUP_THM]
+QED
+
+Theorem perm_move1:
+  PERM (A ++ B ++ x::C) t ⇒ PERM (x::(A ++ B ++ C)) t
+Proof
+  strip_tac >> pop_assum mp_tac >>
+  REWRITE_TAC [sortingTheory.PERM_FUN_APPEND_CONS, listTheory.APPEND]
+QED
+
+Theorem perm_cons_mid[local]:
+  PERM (A ++ x::B ++ C) = PERM (x::(A ++ B ++ C))
+Proof
+  REWRITE_TAC [GSYM listTheory.APPEND_ASSOC, listTheory.APPEND,
+               sortingTheory.PERM_FUN_APPEND_CONS]
+QED
+
+Theorem perm_move2:
+  PERM (A ++ B ++ x::C) t ⇒ PERM (A ++ x::B ++ C) t
+Proof
+  REWRITE_TAC [perm_cons_mid] >> MATCH_ACCEPT_TAC perm_move1
+QED
+
+Theorem perm_mem_fst:
+  PERM (A ++ B ++ (a,v)::C) t ⇒ MEM a (MAP FST t)
+Proof
+  rw[] >> drule sortingTheory.MEM_PERM >>
+  simp[listTheory.MEM_MAP, pairTheory.EXISTS_PROD] >> metis_tac[]
+QED
+
+Theorem SORTED_val_le_MAP_SND:
+  ∀ys. SORTED val_le ys ⇒ SORTED $<= (MAP SND ys)
+Proof
+  Induct >> simp[] >> Cases_on ‘ys’ >> fs[sortingTheory.SORTED_DEF] >>
+  rpt strip_tac >> fs[] >> Cases_on ‘h’ >> Cases_on ‘h'’ >> fs[val_le_def]
+QED
+
+Theorem PERM_MAP_SND_trans:
+  PERM ys xs ∧ PERM (MAP SND xs) input ⇒ PERM (MAP SND ys) input
+Proof
+  rw[] >> irule sortingTheory.PERM_TRANS >> qexists_tac ‘MAP SND xs’ >>
+  simp[] >> irule sortingTheory.PERM_MAP >> simp[]
+QED
+
+Theorem nodes_ok_PERM_MAP:
+  PERM ys xs ∧ nodes_ok dm (MAP FST xs) ⇒ nodes_ok dm (MAP FST ys)
+Proof
+  rw[] >> irule nodes_ok_perm >> qexists_tac ‘MAP FST xs’ >> simp[] >>
+  irule sortingTheory.PERM_MAP >> simp[]
+QED
+
+Theorem EVERY_PERM_MAP:
+  PERM ys xs ∧ EVERY P (MAP FST xs) ⇒ EVERY P (MAP FST ys)
+Proof
+  rw[listTheory.EVERY_MEM, listTheory.MEM_MAP] >>
+  metis_tac[sortingTheory.MEM_PERM]
+QED
+
+Theorem heap_ok_base:
+  heap_ok base tp dm n ⇒ base ∈ dm ∧ aligned 3 base
+Proof
+  rw[heap_ok_def] >> first_x_assum (qspec_then ‘0’ mp_tac) >> simp[]
+QED
+
+(* ------------------------------------------------------------------------
+   qs: quicksort of a linked list, in place
+   ------------------------------------------------------------------------ *)
+
+(* The loop invariant, for the list (h0,h1)::t of the case split on xs. *)
+val (qs_inv0, qs_var) = loop "qs" 0;
+val qs_inv =
+  subst [“xs:(word64 # word64) list” |-> “(h0:word64,h1:word64)::t”] qs_inv0;
+
+val iter_simps = [FLOOKUP_res_var, finite_mapTheory.FLOOKUP_UPDATE,
+                  combinTheory.APPLY_UPDATE_THM, ne_plus_8, lseg_def];
+val iter_finish =
+  rpt conj_tac >>
+  TRY (irule lseg_upd >> metis_tac[listTheory.MEM] >> NO_TAC) >>
+  TRY (irule frame_trans' >> qexists_tac ‘s'.memory’ >> simp[] >>
+       irule frame_update >> simp[] >> NO_TAC);
+
+(* Loop exit (rest = 0): the two recursive calls and the final list. *)
+val qs_exit_tac =
+  strip_tac >> ‘rest = 0w’ by (Cases_on ‘rest = 0w’ >> fs[]) >>
+  ‘rs = []’ by (qspecl_then [‘rs’, ‘s'.memory’, ‘rest’] mp_tac lseg_null >>
+                impl_tac >- (simp[] >> irule nodes_ok_nonzero >> metis_tac[]) >>
+                simp[]) >>
+  gvs[] >> steps_tac >>
+  qpat_x_assum ‘nodes_ok _ (h0::(_ ++ _))’
+    (strip_assume_tac o MATCH_MP nodes_ok_parts2') >>
+  (* var h = qs(hi, acc) *)
+  qpat_x_assum ‘fun_spec _ _ _ (λvs s. ∃l acc. vs = [l; acc] ∧ lseg s.memory his l 0w ∧ _) _’
+    (MATCH_MP_TAC o Q.INST [‘vs’ |-> ‘[hi; acc]’] o MATCH_MP dec_call_rule) >>
+  simp eval_simps >>
+  rpt gen_tac >> strip_tac >> steps_tac >>
+  rename1 ‘lseg m ys1 v acc’ >> rename1 ‘frame (MAP FST his) s'.memory m’ >>
+  ‘lseg m los lo 0w’ by metis_tac[lseg_frame_ok] >>
+  ‘m h0 = Word h1’ by metis_tac[frame_node] >>
+  (* return qs(lo, l) *)
+  qpat_x_assum ‘fun_spec _ _ _ (λvs s. ∃l acc. vs = [l; acc] ∧ lseg s.memory los l 0w ∧ _) _’
+    (MATCH_MP_TAC o Q.INST [‘vs’ |-> ‘[lo; h0]’] o MATCH_MP tail_call_rule) >>
+  simp eval_simps >>
+  conj_tac >- (irule lseg_upd >> metis_tac[listTheory.MEM]) >>
+  rpt gen_tac >> strip_tac >> rename1 ‘lseg m' ys2 v' h0’ >>
+  conj_tac >- simp[state_component_equality] >>
+  qabbrev_tac ‘m3 = m⦇h0 + 8w ↦ Word v⦈’ >>
+  ‘∀b. MEM b (MAP FST los) ∨ MEM b (MAP FST his) ⇒ MEM b (MAP FST t)’
+    by (‘PERM (MAP FST (los ++ his)) (MAP FST t)’
+          by (irule sortingTheory.PERM_MAP >> first_assum ACCEPT_TAC) >>
+        drule sortingTheory.MEM_PERM >> simp[] >> metis_tac[]) >>
+  (* the result is sorted(lo) ++ [pivot] ++ sorted(hi) *)
+  qexists_tac ‘ys2 ++ (h0,h1)::ys1’ >> simp[] >> rpt conj_tac
+  >| [
+    (* permutation *)
+    MATCH_MP_TAC (SPEC_ALL qs_perm) >> rpt conj_tac >> first_assum ACCEPT_TAC,
+    (* sortedness *)
+    MATCH_MP_TAC (SPEC_ALL qs_sorted) >> rpt conj_tac >> first_assum ACCEPT_TAC,
+    (* the list segment *)
+    ‘m3 h0 = Word h1 ∧ m3 (h0 + 8w) = Word v’
+      by simp[Abbr ‘m3’, combinTheory.APPLY_UPDATE_THM, ne_plus_8] >>
+    ‘m' h0 = m3 h0 ∧ m' (h0 + 8w) = m3 (h0 + 8w)’ by metis_tac[frame_node] >>
+    ‘lseg m3 ys1 v acc’
+      by (simp[Abbr ‘m3’] >> irule lseg_upd >>
+          metis_tac[listTheory.MEM, nodes_ok_perm_app]) >>
+    ‘lseg m' ys1 v acc’ by metis_tac[lseg_frame_ok, nodes_ok_perm_app] >>
+    MATCH_MP_TAC (SPEC_ALL qs_lseg) >> rpt conj_tac >> fs[],
+    (* the frame *)
+    ‘frame (h0::MAP FST t) s.memory s'.memory’
+      by (irule frame_lift >> qexists_tac ‘MAP FST t’ >> simp[]) >>
+    ‘frame (h0::MAP FST t) s'.memory m’
+      by (irule frame_lift >> qexists_tac ‘MAP FST his’ >> simp[]) >>
+    ‘frame (h0::MAP FST t) m m3’
+      by (simp[Abbr ‘m3’] >> irule frame_update >> simp[]) >>
+    ‘frame (h0::MAP FST t) m3 m'’
+      by (irule frame_lift >> qexists_tac ‘MAP FST los’ >> simp[]) >>
+    metis_tac[frame_trans']];
+
+(* One iteration: move the first node of rest onto lo or hi. *)
+val qs_iter_tac =
+  strip_tac >> ‘rest ≠ 0w’ by (CCONTR_TAC >> fs[]) >>
+  qpat_x_assum ‘fun_spec _ _ _ _ _’ kall_tac >>
+  qpat_x_assum ‘fun_spec _ _ _ _ _’ kall_tac >>
+  Cases_on ‘rs’ >- gvs[lseg_def] >>
+  rename1 ‘los ++ his ++ hd::rs’ >> PairCases_on ‘hd’ >>
+  rename1 ‘los ++ his ++ (a,v)::rs’ >>
+  qpat_x_assum ‘lseg _ ((a,v)::rs) _ _’ (strip_assume_tac o REWRITE_RULE [lseg_def]) >>
+  gvs[] >>
+  qpat_x_assum ‘nodes_ok _ (h0::(_ ++ _))’
+    (strip_assume_tac o MATCH_MP nodes_ok_parts3') >>
+  drule perm_mem_fst >> strip_tac >>
+  imp_res_tac perm_move1 >> imp_res_tac perm_move2 >>
+  steps_tac
+  >| [
+    ‘v < h1’ by (CCONTR_TAC >> fs[]) >>
+    qexists_tac ‘((a,v)::los, his, rs)’ >> simp iter_simps >> iter_finish,
+    ‘h1 ≤ v’ by (Cases_on ‘v < h1’ >> fs[wordsTheory.WORD_NOT_LESS]) >>
+    qexists_tac ‘(los, (a,v)::his, rs)’ >> simp iter_simps >> iter_finish];
+
+val qs_tac =
+  (* induction on the length of the list, for the two recursive calls *)
+  gen_tac >> completeInduct_on ‘LENGTH xs’ >> rpt strip_tac >>
+  simp[fun_spec_def, qsort_code_lookups] >> rpt strip_tac >> gvs[] >>
+  rewrite_tac[qs_body_def] >>
+  Cases_on ‘xs’
+  >- (gvs[lseg_def] >> steps_tac >> qexists_tac ‘[]’ >>
+      simp[lseg_def, state_component_equality]) >>
+  PairCases_on ‘h’ >> gvs[lseg_def] >>
+  ‘h0 ≠ 0w ∧ h0 ∈ s.memaddrs ∧ h0 + 8w ∈ s.memaddrs’ by gvs[nodes_ok_def] >>
+  steps_tac >>
+  while_tac qs_inv qs_var
+  >| [
+    (* the loop body preserves the invariant, or the loop exits *)
+    simp[pairTheory.FORALL_PROD] >> rpt gen_tac >> strip_tac >>
+    gvs[same_frame_def] >> simp eval_simps >>
+    rename [‘PERM (los ++ his ++ rs) t’] >>
+    ‘LENGTH los + LENGTH his + LENGTH rs = LENGTH t’
+      by (imp_res_tac sortingTheory.PERM_LENGTH >> fs[]) >>
+    (* the contracts of the two recursive calls, from the induction *)
+    first_assum (qspec_then ‘LENGTH his’ mp_tac) >>
+    first_x_assum (qspec_then ‘LENGTH los’ mp_tac) >>
+    impl_tac >- decide_tac >>
+    disch_then (qspec_then ‘los’ (assume_tac o REWRITE_RULE [])) >>
+    impl_tac >- decide_tac >>
+    disch_then (qspec_then ‘his’ (assume_tac o REWRITE_RULE [])) >>
+    ‘nodes_ok s.memaddrs (h0 :: MAP FST los ++ MAP FST his ++ MAP FST rs)’
+      by (irule nodes_ok_perm >> qexists_tac ‘h0 :: MAP FST t’ >>
+          simp[sortingTheory.PERM_CONS_IFF] >>
+          REWRITE_TAC [GSYM listTheory.MAP_APPEND] >>
+          irule sortingTheory.PERM_MAP >> first_assum ACCEPT_TAC) >>
+    conj_tac >| [qs_exit_tac, qs_iter_tac],
+    (* the invariant holds on entry *)
+    qexists_tac ‘([],[],t)’ >>
+    simp[same_frame_def, finite_mapTheory.FLOOKUP_UPDATE, lseg_def]];
+
+val qs_spec = store_thm ("qs_spec", goal_of "qs", qs_tac);
+
+(* ------------------------------------------------------------------------
+   main
+   ------------------------------------------------------------------------ *)
+
+val main_spec = store_thm ("main_spec", goal_of "main",
+  rpt gen_tac >> simp[fun_spec_def, qsort_code_lookups] >> rpt strip_tac >> fs[] >>
+  rewrite_tac[main_body_def] >> steps_tac >>
+  (* var lst = read_list() *)
+  MATCH_MP_TAC (Q.INST [‘vs’ |-> ‘[]’] (MATCH_MP dec_call_rule (SPEC_ALL read_list_spec))) >>
+  simp eval_simps >> rpt gen_tac >> strip_tac >> steps_tac >>
+  (* var sorted = qs(lst, 0) *)
+  MATCH_MP_TAC (Q.INST [‘vs’ |-> ‘[v; 0w]’] (MATCH_MP dec_call_rule (SPEC_ALL qs_spec))) >>
+  simp eval_simps >> rpt gen_tac >> strip_tac >> steps_tac >>
+  rename1 ‘lseg m2 ys v2 0w’ >>
+  drule_all heap_ok_base >> strip_tac >>
+  (* print_list(sorted) *)
+  MATCH_MP_TAC (Q.INST [‘vs’ |-> ‘[v2]’]
+                  (MATCH_MP stand_alone_call_rule (SPEC_ALL print_list_spec))) >>
+  simp eval_simps >>
+  conj_tac >- metis_tac[nodes_ok_PERM_MAP, EVERY_PERM_MAP] >>
+  rpt gen_tac >> strip_tac >> steps_tac >>
+  qexists_tac ‘MAP SND ys’ >>
+  simp[SORTED_val_le_MAP_SND, listTheory.MAP_MAP_o] >>
+  metis_tac[PERM_MAP_SND_trans]);
+
+(* ------------------------------------------------------------------------
+   The whole program
+   ------------------------------------------------------------------------ *)
+
+(* Pancake's observable semantics of qsort.pnk, started at main as in the
+   Pancake compiler's correctness theorem (pan_to_targetProof): it terminates
+   successfully, having read the numbers in input (then end of input) and
+   printed a sorted permutation of them. *)
+Theorem qsort_pan_semantics:
+  s.code = FEMPTY ∧ s.ffi.oracle = qs_oracle ∧ s.ffi.ffi_state = input ∧ ¬s.be ∧
+  heap_ok s.base_addr s.top_addr s.memaddrs (LENGTH input) ⇒
+  ∃ys. SORTED $<= ys ∧ PERM ys input ∧
+       semantics_decls s «main» qsort_decls =
+         Terminate Success (s.ffi.io_events ++ MAP (get_ev o SOME) input ++
+                            [get_ev NONE] ++ MAP put_ev ys)
+Proof
+  strip_tac >>
+  simp[semantics_decls_def, qsort_decs_stcnames, evaluate_decls_qsort] >>
+  qabbrev_tac ‘s1 = s with <|structs := []; code := qsort_code|>’ >>
+  ‘runs (Call NONE «main» []) s1
+     (λ(r,t). (∃v. r = SOME (Return v)) ∧
+              ∃ys. SORTED $<= ys ∧ PERM ys input ∧
+                   t.ffi.io_events = s.ffi.io_events ++ MAP (get_ev o SOME) input ++
+                                     [get_ev NONE] ++ MAP put_ev ys)’
+    by (MATCH_MP_TAC (Q.INST [‘vs’ |-> ‘[]’]
+                        (MATCH_MP tail_call_rule (SPEC_ALL main_spec))) >>
+        simp[Abbr ‘s1’, panSemTheory.eval_def, listTheory.OPT_MMAP_def]) >>
+  fs[runs_def] >>
+  Cases_on ‘evaluate (Call NONE «main» [], s1 with clock := s1.clock + ck)’ >> fs[] >>
+  qexists_tac ‘ys’ >> simp[] >>
+  irule runs_semantics >> simp[runs_def] >> qexists_tac ‘ck’ >> simp[]
+QED

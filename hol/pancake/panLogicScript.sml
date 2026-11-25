@@ -155,8 +155,9 @@ QED
 
 (* Function fname has word parameters params and a word result.  For all
    calls whose arguments vs satisfy the precondition P, the body returns a
-   word v, changes at most memory and FFI state (locals are discarded on
-   return), and the postcondition Q relates the call state s, the result v,
+   word v, changes at most memory and FFI state (and its own local
+   variables, which the caller never sees: a call restores the caller's
+   locals), and the postcondition Q relates the call state s, the result v,
    and the final memory and FFI state. *)
 Definition fun_spec_def:
   fun_spec code fname (params: mlstring list)
@@ -170,7 +171,7 @@ Definition fun_spec_def:
         s.code = code ∧ LENGTH vs = LENGTH params ∧ P vs s ⇒
         runs body (s with locals := FEMPTY |++ ZIP (params, MAP ValWord vs))
           (λ(r,t). ∃v. r = SOME (Return (ValWord v)) ∧
-                       t = s with <| locals := FEMPTY; memory := t.memory;
+                       t = s with <| locals := t.locals; memory := t.memory;
                                      ffi := t.ffi; clock := t.clock |> ∧
                        Q vs s v t.memory t.ffi)
 End
@@ -190,7 +191,7 @@ Theorem fun_spec_lookup[local]:
          ∀s. s.code = code ∧ P vs s ⇒
            runs body (s with locals := FEMPTY |++ ZIP (params, MAP ValWord vs))
              (λ(r,t). ∃v. r = SOME (Return (ValWord v)) ∧
-                          t = s with <| locals := FEMPTY; memory := t.memory;
+                          t = s with <| locals := t.locals; memory := t.memory;
                                         ffi := t.ffi; clock := t.clock |> ∧
                           Q vs s v t.memory t.ffi)
 Proof
@@ -267,6 +268,44 @@ Proof
               simp[state_component_equality]) >>
   pop_assum SUBST_ALL_TAC >>
   Cases_on ‘evaluate (p1, Y)’ >> fs[]
+QED
+
+(* The call rules with the callee's contract as a separate first premise,
+   for use with MATCH_MP (and Q.INST for the argument values vs). *)
+Theorem dec_call_rule:
+  fun_spec code f params Pre Post ⇒
+  s.code = code ∧ OPT_MMAP (eval s) args = SOME (MAP ValWord vs) ∧
+  LENGTH vs = LENGTH params ∧ Pre vs s ∧
+  (∀v m ff c. Post vs s v m ff ⇒
+     runs p1 (s with <| locals := s.locals |+ (x, ValWord v);
+                        memory := m; ffi := ff; clock := c |>)
+       (λ(r,t). P (r, t with locals := res_var t.locals (x, FLOOKUP s.locals x)))) ⇒
+  runs (DecCall x One f args p1) s P
+Proof
+  metis_tac[runs_DecCall_spec]
+QED
+
+Theorem tail_call_rule:
+  fun_spec code f params Pre Post ⇒
+  s.code = code ∧ OPT_MMAP (eval s) args = SOME (MAP ValWord vs) ∧
+  LENGTH vs = LENGTH params ∧ Pre vs s ∧
+  (∀v m ff c. Post vs s v m ff ⇒
+     P (SOME (Return (ValWord v)),
+        s with <| locals := FEMPTY; memory := m; ffi := ff; clock := c |>)) ⇒
+  runs (Call NONE f args) s P
+Proof
+  metis_tac[runs_TailCall_spec]
+QED
+
+Theorem stand_alone_call_rule:
+  fun_spec code f params Pre Post ⇒
+  s.code = code ∧ OPT_MMAP (eval s) args = SOME (MAP ValWord vs) ∧
+  LENGTH vs = LENGTH params ∧ Pre vs s ∧
+  (∀v m ff c. Post vs s v m ff ⇒
+     P (NONE, s with <| memory := m; ffi := ff; clock := c |>)) ⇒
+  runs (Call (SOME (NONE, h)) f args) s P
+Proof
+  metis_tac[runs_StandAloneCall_spec]
 QED
 
 (* ------------------------------------------------------------------------
