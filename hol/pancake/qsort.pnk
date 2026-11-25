@@ -1,0 +1,131 @@
+// Quicksort on a pointer-linked list, in Pancake, with contracts.
+//
+// Contracts are annotation comments  /@ ... @/  which the Pancake compiler
+// keeps as no-op Annot nodes.  Their bodies are HOL4 terms (ASCII syntax).
+// The HOL4 tooling in panContractLib turns every contract into a proof
+// obligation about Pancake's formal semantics; panQsortScript proves them.
+//
+// Contract vocabulary
+//   requires: P      precondition of the enclosing function
+//   ensures:  Q      postcondition
+//   invariant [g..]: I    loop invariant of the following while loop,
+//                         with existentially quantified ghost variables g..
+//   decreases: e     loop variant (a natural number that strictly decreases)
+// Variables in contracts
+//   Pancake parameters and locals (as 64-bit words),
+//   mem dom ffi base top be   memory, memory domain, FFI state, @base, @top,
+//                             endianness, in the current state
+//   result mem' ffi'          return value / final memory / final FFI (ensures)
+//   mem0 ffi0                 memory / FFI at function entry (invariants)
+//   any other free variable is a ghost, universally quantified over the
+//   function's contract.
+//
+// Memory layout: @base .. @base+16 is the I/O buffer, list nodes are
+// [value; next] pairs allocated upwards from @base + 16.
+
+fun qs(1 l, 1 acc) {
+  /@ requires:
+       lseg mem xs l 0w /\ nodes_ok dom (MAP FST xs) @/
+  /@ ensures:
+       ?ys. PERM ys xs /\ SORTED val_le ys /\ lseg mem' ys result acc /\
+            frame (MAP FST xs) mem mem' /\ ffi' = ffi @/
+  if (l == 0) {
+    return acc;
+  }
+  var pivot = lds 1 l;
+  var rest = lds 1 (l + 8);
+  var lo = 0;
+  var hi = 0;
+  /@ invariant [los his rs]:
+       xs = (l,pivot) :: TL xs /\ mem l = Word pivot /\
+       lseg mem los lo 0w /\ lseg mem his hi 0w /\ lseg mem rs rest 0w /\
+       PERM (los ++ his ++ rs) (TL xs) /\
+       EVERY (\(a,v). v < pivot) los /\ EVERY (\(a,v). pivot <= v) his /\
+       frame (MAP FST (TL xs)) mem0 mem /\ ffi = ffi0 @/
+  /@ decreases: LENGTH rs @/
+  while (rest != 0) {
+    var nxt = lds 1 (rest + 8);
+    if ((lds 1 rest) < pivot) {
+      st (rest + 8), lo;
+      lo = rest;
+    } else {
+      st (rest + 8), hi;
+      hi = rest;
+    }
+    rest = nxt;
+  }
+  var 1 h = qs(hi, acc);    // h = sorted(hi) ++ acc
+  st (l + 8), h;            // pivot :: sorted(hi) ++ acc
+  return qs(lo, l);         // sorted(lo) ++ pivot :: sorted(hi) ++ acc
+}
+
+fun read_list() {
+  /@ requires:
+       ffi.oracle = qs_oracle /\ ffi.ffi_state = input /\ ~be /\
+       heap_ok base top dom (LENGTH input) @/
+  /@ ensures:
+       ?xs. lseg mem' xs result 0w /\ nodes_ok dom (MAP FST xs) /\
+            PERM (MAP SND xs) input /\ EVERY (away_from base) (MAP FST xs) /\
+            ffi' = ffi with <| ffi_state := [];
+                               io_events := ffi.io_events ++
+                                 MAP (get_ev o SOME) input ++ [get_ev NONE] |> @/
+  var heap = @base + 16;
+  var lst = 0;
+  /@ invariant [done]:
+       done ++ ffi.ffi_state = input /\ ffi.oracle = qs_oracle /\
+       ffi.io_events = ffi0.io_events ++ MAP (get_ev o SOME) done /\
+       heap = base + 16w + n2w (16 * LENGTH done) /\
+       lseg mem (alloc_list base done) lst 0w @/
+  /@ decreases: LENGTH ffi.ffi_state @/
+  while (1) {
+    st @base, 0;
+    st (@base + 8), 0;
+    @get_num(0, 0, @base, 9);
+    if ((ld8 (@base + 8)) == 0) {
+      break;
+    }
+    if ((@top - heap) <+ 16) {
+      return 0;               // out of memory (excluded by heap_ok)
+    }
+    st heap, lds 1 @base;
+    st (heap + 8), lst;
+    lst = heap;
+    heap = heap + 16;
+  }
+  return lst;
+}
+
+fun print_list(1 l) {
+  /@ requires:
+       ffi.oracle = qs_oracle /\ ~be /\ base IN dom /\ aligned 3 base /\
+       lseg mem ys l 0w /\ nodes_ok dom (MAP FST ys) /\
+       EVERY (away_from base) (MAP FST ys) @/
+  /@ ensures:
+       ffi' = ffi with io_events := ffi.io_events ++ MAP (put_ev o SND) ys /\
+       (!a. a <> base ==> mem' a = mem a) @/
+  /@ invariant [done rest]:
+       ys = done ++ rest /\ lseg mem rest l 0w /\
+       ffi = ffi0 with io_events := ffi0.io_events ++ MAP (put_ev o SND) done /\
+       (!a. a <> base ==> mem a = mem0 a) @/
+  /@ decreases: LENGTH rest @/
+  while (l != 0) {
+    st @base, lds 1 l;
+    @put_num(0, 0, @base, 8);
+    l = lds 1 (l + 8);
+  }
+  return 0;
+}
+
+fun main() {
+  /@ requires:
+       ffi.oracle = qs_oracle /\ ffi.ffi_state = input /\ ~be /\
+       heap_ok base top dom (LENGTH input) @/
+  /@ ensures:
+       ?ys. SORTED $<= ys /\ PERM ys input /\
+            ffi'.io_events = ffi.io_events ++ MAP (get_ev o SOME) input ++
+                             [get_ev NONE] ++ MAP put_ev ys @/
+  var 1 lst = read_list();
+  var 1 sorted = qs(lst, 0);
+  print_list(sorted);
+  return 0;
+}

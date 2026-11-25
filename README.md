@@ -90,6 +90,33 @@ stops early with an out-of-memory exit.
 Input is passed as command-line arguments. That is what the monadic
 translator's I/O interface supports, and it keeps `main` HOL-generated.
 
+## Continuous integration
+
+`.github/workflows/verify.yml` runs on every push and pull request.
+
+1. **Toolchain image.** The `ci` stage of `docker/Dockerfile` holds Poly/ML,
+   HOL4, CakeML, the `cake` compiler, and every CakeML theory this project
+   depends on, already built (via `docker/warmup/`).
+   - It is pushed to `ghcr.io/<owner>/verified-qsort-toolchain`, tagged by a
+     hash of `docker/`.
+   - It is only rebuilt when `docker/` changes. That first build takes a few
+     hours on a GitHub-hosted runner, within the 6-hour job limit.
+2. **Verify.** Inside that image, `ci/check.sh`:
+   - re-checks every proof in `hol/` and `hol/pancake/`;
+   - fails if any theorem depends on a `cheat` or other oracle
+     (`ci/no_cheats.sml`);
+   - compiles both programs with the verified `cake` compiler and tests the
+     binaries against `sort -n`.
+
+   The binaries and `.S` files are uploaded as a build artifact. This step
+   takes about 3 minutes.
+
+To run the same checks locally in a container built from the `ci` stage:
+`bash ci/check.sh .` from the repository root.
+
+The Tier 2 machine-code theorem (`hol/compile/`) is not part of CI, because
+it needs CakeML's full compiler proofs (many hours).
+
 ## Building
 
 Requires Docker. Everything runs in a container built from `docker/Dockerfile`:

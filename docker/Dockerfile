@@ -1,7 +1,12 @@
 # Toolchain for the verified Pancake quicksort:
 #   Poly/ML 5.9.2  ->  HOL4 (trindemossen-2-v10)  ->  CakeML v3671 sources + bootstrapped compiler
 # The HOL and CakeML commits are the pair the CakeML v3671 release was built and tested with.
-FROM ubuntu:24.04
+#
+# Stages:
+#   base  toolchain only (used by ./build.sh, which builds dependencies lazily)
+#   ci    base + every CakeML theory the project depends on, prebuilt
+#         (used by the GitHub Actions workflow)
+FROM ubuntu:24.04 AS base
 
 ARG POLY_VERSION=5.9.2
 ARG HOL_COMMIT=9783a49979c94c401ff8c0e51b2eefae7ea95ae3
@@ -40,3 +45,11 @@ RUN mkdir -p /opt/cake && cd /opt/cake \
  && curl -sL https://github.com/CakeML/cakeml/releases/download/${CAKEML_RELEASE}/cake-x64-64.tar.gz | tar xz \
  && cd cake-x64-64 && make cake
 ENV PATH=/opt/cake/cake-x64-64:$PATH
+
+# ---- CI image: prebuild the CakeML theories the project depends on ----
+FROM base AS ci
+COPY warmup /opt/cakeml/examples/ci_warmup
+RUN cd /opt/cakeml/examples/ci_warmup \
+ && Holmake -j"$(nproc)" \
+ && cd /opt/cakeml/pancake/parser && Holmake -j"$(nproc)" panPtreeConversionTheory \
+ && rm -rf /opt/cakeml/examples/ci_warmup

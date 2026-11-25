@@ -1,0 +1,6 @@
+all: $(DEFAULT_TARGETS)
+.PHONY: all
+
+ifdef POLY
+HOLHEAP = $(CAKEMLDIR)/basis/basis-heap
+endif

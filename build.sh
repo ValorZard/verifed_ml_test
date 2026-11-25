@@ -17,7 +17,7 @@ IMAGE=vqs-toolchain:base
 NAME=vqs-dev
 HOLDIR_IN=/opt/cakeml/examples/verified_qsort
 
-docker image inspect "$IMAGE" >/dev/null 2>&1 || docker build -t "$IMAGE" docker
+docker image inspect "$IMAGE" >/dev/null 2>&1 || docker build --target base -t "$IMAGE" docker
 
 if ! docker container inspect "$NAME" >/dev/null 2>&1; then
   docker run -d --name "$NAME" -v "$(pwd -W 2>/dev/null || pwd)/hol:$HOLDIR_IN" "$IMAGE" sleep infinity
