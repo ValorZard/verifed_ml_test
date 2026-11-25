@@ -1,0 +1,8 @@
+all: $(DEFAULT_TARGETS)
+.PHONY: all
+
+LOCAL_PARALLELISM_LIMIT = 1
+
+ifdef POLY
+HOLHEAP = $(CAKEMLDIR)/cv_translator/cake_compile_heap
+endif
